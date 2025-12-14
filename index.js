@@ -2,8 +2,7 @@ const express = require('express');
 const cors = require('cors'); 
 const { MercadoPagoConfig, Preference, Payment, MerchantOrder } = require("mercadopago");
 const dotenv = require('dotenv');
-const fs = require('fs'); // Necessário para ler o PDF
-// 1. Importar o SDK do SendGrid
+const fs = require('fs'); 
 const sgMail = require('@sendgrid/mail'); 
 
 // Carregar variáveis de ambiente do arquivo .env
@@ -15,18 +14,17 @@ const corsOptions = {
   optionsSuccessStatus: 200 
 }
 
-// 2. Configurar a API Key do SendGrid
+// Configurar a API Key do SendGrid
 sgMail.setApiKey(process.env.SENDGRID_API_KEY );
 
-// 3. Função para enviar o e-mail com o PDF (AGORA COM SENDGRID)
+// Função para enviar o e-mail com o PDF (AGORA COM SENDGRID)
 async function sendProductEmail(recipientEmail, pdfPath) {
     try {
-        // Ler o arquivo PDF e converter para Base64 (necessário para a API do SendGrid)
+        // Ler o arquivo PDF e converter para Base64
         const fileContent = fs.readFileSync(`./${pdfPath}`).toString('base64');
 
         const msg = {
             to: recipientEmail,
-            // O e-mail DEVE ser o que acabou de verificar no SendGrid
             from: 'migueloliveiraaleixosantos1@gmail.com', 
             subject: "Seu Produto Digital - O Caminho Real para a Sua Renda Online",
             html: `
@@ -83,7 +81,6 @@ app.get('/', (req, res) => {
 
 // Rota para criar a preferência de pagamento (mantida)
 app.post('/create_preference', async (req, res) => {
-    // ... (código da rota create_preference)
     const { buyer_email, external_reference } = req.body;
 
     if (!buyer_email) {
@@ -163,11 +160,14 @@ app.post('/webhook', async (req, res) => {
                 console.log(`Pedido (external_reference): ${resource.external_reference}`);
 
                 const recipientEmail = resource.payer.email;
+                
+                // >>>>> LOG DE DEBBUG AQUI <<<<<
+                console.log(`[DEBUG] E-mail do Destinatário: ${recipientEmail}`);
+                
                 const pdfPath = process.env.PDF_FILE_PATH;
                 const externalRef = resource.external_reference;
 
                 if (recipientEmail && pdfPath) {
-                    // 4. Chamada da função de envio de e-mail atualizada
                     const emailSent = await sendProductEmail(recipientEmail, pdfPath);
                     if (emailSent) {
                         console.log(`✓ E-mail enviado com sucesso para ${recipientEmail} (Pedido: ${externalRef})`);
