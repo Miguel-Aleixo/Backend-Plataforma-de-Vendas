@@ -1,39 +1,48 @@
 const express = require('express');
-// 1. Importações corrigidas: MercadoPagoConfig para o cliente e as classes de API (Preference, Payment, MerchantOrder)
+// 1. Importar o middleware CORS
+const cors = require('cors'); 
 const { MercadoPagoConfig, Preference, Payment, MerchantOrder } = require("mercadopago");
 const dotenv = require('dotenv');
-const nodemailer = require('nodemailer'); // Importar Nodemailer
+const nodemailer = require('nodemailer');
 
 // Carregar variáveis de ambiente do arquivo .env
 dotenv.config();
 
-// Configuração do Nodemailer
+// Configuração do CORS para permitir apenas o seu frontend
+const corsOptions = {
+  // 2. Definir a origem permitida (o seu frontend)
+  origin: 'https://caminhodigital.vercel.app', 
+  optionsSuccessStatus: 200 
+}
+
+// Configuração do Nodemailer (mantida )
 const transporter = nodemailer.createTransport({
     host: process.env.EMAIL_HOST,
     port: process.env.EMAIL_PORT,
-    secure: process.env.EMAIL_PORT == 465, // true for 465, false for other ports
+    secure: process.env.EMAIL_PORT == 465,
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
 });
 
-// Função para enviar o e-mail com o PDF
+// Função para enviar o e-mail com o PDF (mantida)
 async function sendProductEmail(recipientEmail, pdfPath) {
+    // ... (código da função sendProductEmail)
     try {
         const info = await transporter.sendMail({
-            from: `"Sua Loja" <${process.env.EMAIL_USER}>`, // Endereço do remetente
-            to: recipientEmail, // Lista de destinatários
-            subject: "Seu Produto Digital - O Caminho Real para a Sua Renda Online", // Assunto
+            from: `"Sua Loja" <${process.env.EMAIL_USER}>`,
+            to: recipientEmail,
+            subject: "Seu Produto Digital - O Caminho Real para a Sua Renda Online",
             html: `
                 <p>Parabéns! Seu pagamento foi aprovado.</p>
                 <p>Segue em anexo o seu produto digital.</p>
                 <p>Obrigado por sua compra!</p>
-            `, // Corpo do e-mail em HTML
+            `,
             attachments: [
                 {
                     filename: pdfPath,
-                    path: `./${pdfPath}`, // Caminho do arquivo no servidor
+                    path: `./${pdfPath}`,
                     contentType: 'application/pdf'
                 }
             ]
@@ -50,36 +59,31 @@ async function sendProductEmail(recipientEmail, pdfPath) {
 const app = express();
 const port = 3000;
 
-const corsOptions = {
-    origin: 'https://caminhodigital.vercel.app', // Apenas o seu domínio do frontend
-    optionsSuccessStatus: 200 // Para navegadores legados
-}
-
-app.use(cors(corsOptions));
+// 3. Usar o middleware CORS ANTES de qualquer rota
+app.use(cors(corsOptions)); 
 
 // Middleware para processar JSON no corpo das requisições
 app.use(express.json());
 
-// 2. Configurar as credenciais do Mercado Pago com a nova classe MercadoPagoConfig
-const client = new MercadoPagoConfig({
+// Configurar as credenciais do Mercado Pago (mantida)
+const client = new MercadoPagoConfig({ 
     accessToken: process.env.ACCESS_TOKEN,
     options: { timeout: 5000 }
 });
 
-// Inicializar os clientes de API que serão usados nas rotas
+// Inicializar os clientes de API (mantida)
 const preferenceClient = new Preference(client);
 const paymentClient = new Payment(client);
 const merchantOrderClient = new MerchantOrder(client);
 
 
-// Rota de teste
+// Rota de teste (mantida)
 app.get('/', (req, res) => {
     res.send('Servidor de Backend do Mercado Pago rodando!');
 });
 
-// Rota para criar a preferência de pagamento
+// Rota para criar a preferência de pagamento (mantida e corrigida anteriormente)
 app.post('/create_preference', async (req, res) => {
-    // O ideal é que os dados do item, e-mail do comprador e external_reference venham do corpo da requisição (req.body)
     const { buyer_email, external_reference } = req.body;
 
     if (!buyer_email) {
@@ -90,42 +94,37 @@ app.post('/create_preference', async (req, res) => {
         return res.status(400).send({ message: "O external_reference é obrigatório." });
     }
 
-    // Para este exemplo, usaremos um item fixo.
     const item = {
         title: "Produto de Teste",
         unit_price: 0.01,
         quantity: 1,
     };
 
-    // URL de notificação (Webhook)
-    // ATENÇÃO: Substitua 'SUA_URL_DE_DEPLOY_AQUI' pela URL base do seu backend DEPLOYADO.
     const notificationUrl = 'https://backend-plataforma-de-vendas.onrender.com/webhook';
 
     let preference = {
         items: [item],
         payer: {
-            email: buyer_email, // O e-mail do comprador é essencial para o envio do PDF
+            email: buyer_email,
         },
         back_urls: {
-            success: "https://caminhodigital/feedback/success", // URLs de retorno após o pagamento
+            success: "https://caminhodigital/feedback/success",
             failure: "https://caminhodigital/feedback/failure",
             pending: "https://caminhodigital/feedback/pending",
         },
         auto_return: "approved",
         notification_url: notificationUrl,
-        external_reference: external_reference, // ID único para rastrear o pedido no seu sistema (recebido do frontend )
+        external_reference: external_reference,
     };
 
     try {
-        // 3. Alteração: Usar preferenceClient.create e passar o objeto preference dentro de { body: ... }
-        const response = await preferenceClient.create({ body: preference });
-
+        const response = await preferenceClient.create({ body: preference } );
+        
         console.log(`Preferência criada com sucesso. External Reference: ${external_reference}`);
         res.status(200).json({
-            // 4. Alteração: O novo SDK retorna o objeto diretamente, sem a propriedade .body
             id: response.id,
-            init_point: response.init_point, // URL para redirecionar o usuário
-            sandbox_init_point: response.sandbox_init_point // URL para redirecionar em ambiente de sandbox
+            init_point: response.init_point,
+            sandbox_init_point: response.sandbox_init_point
         });
     } catch (error) {
         console.error(error);
@@ -133,14 +132,13 @@ app.post('/create_preference', async (req, res) => {
     }
 });
 
-// Rota de feedback (apenas para simulação de retorno)
+// Rota de feedback (mantida)
 app.get('/feedback/:status', (req, res) => {
     res.send(`Status do Pagamento: ${req.params.status}. Detalhes da transação: ${JSON.stringify(req.query)}`);
 });
 
-// Rota para receber notificações de Webhook
+// Rota para receber notificações de Webhook (mantida e corrigida anteriormente)
 app.post('/webhook', async (req, res) => {
-    // O Mercado Pago envia o ID da notificação via query params
     const { topic, id } = req.query;
 
     if (!topic || !id) {
@@ -152,13 +150,10 @@ app.post('/webhook', async (req, res) => {
     try {
         let resource;
 
-        // O Mercado Pago envia diferentes tópicos (payment, merchant_order, etc.)
         if (topic === 'payment') {
-            // 5. Alteração: Usar paymentClient.get({ id: id })
             const payment = await paymentClient.get({ id: id });
-            resource = payment; // O novo SDK retorna o objeto diretamente
+            resource = payment;
 
-            // Lógica principal: Atualizar o status do pedido no seu sistema
             console.log(`--- Processando Pagamento ID: ${resource.id} ---`);
             console.log(`Status do Pagamento: ${resource.status}`);
             console.log(`Referência Externa (Seu ID de Pedido): ${resource.external_reference}`);
@@ -180,23 +175,15 @@ app.post('/webhook', async (req, res) => {
                     console.error("Não foi possível enviar o e-mail: E-mail do comprador ou caminho do PDF ausente.");
                 }
 
-                // **ATENÇÃO:** Aqui você deve adicionar a lógica para atualizar o status do pedido no seu banco de dados
-                // Exemplo:
-                // await updateOrderStatus(externalRef, 'approved');
-                // Isso permitirá que você rastreie o pedido usando o external_reference
-
             } else if (resource.status === 'pending') {
-                // Atualizar pedido para "Pendente"
                 console.log("Pagamento Pendente. Aguardando confirmação.");
             } else if (resource.status === 'rejected') {
-                // Atualizar pedido para "Rejeitado"
                 console.log("Pagamento Rejeitado.");
             }
 
         } else if (topic === 'merchant_order') {
-            // 6. Alteração: Usar merchantOrderClient.get({ id: id })
             const order = await merchantOrderClient.get({ id: id });
-            resource = order; // O novo SDK retorna o objeto diretamente
+            resource = order;
 
             console.log(`--- Processando Ordem de Compra ID: ${resource.id} ---`);
             console.log(`Status da Ordem: ${resource.status}`);
@@ -205,17 +192,15 @@ app.post('/webhook', async (req, res) => {
             console.log(`Tópico de Webhook não suportado: ${topic}`);
         }
 
-        // É crucial responder com 200 OK para o Mercado Pago, mesmo que o tópico não seja processado
         res.status(200).send('OK');
 
     } catch (error) {
         console.error(`Erro ao processar webhook para Tópico: ${topic}, ID: ${id}`, error);
-        // Em caso de erro, o Mercado Pago tentará reenviar a notificação.
         res.status(500).send('Erro interno ao processar o webhook.');
     }
 });
 
-// Iniciar o servidor
+// Iniciar o servidor (mantida)
 app.listen(port, () => {
-    console.log(`Servidor rodando em http://localhost:${port}`);
+    console.log(`Servidor rodando em http://localhost:${port}` );
 });
