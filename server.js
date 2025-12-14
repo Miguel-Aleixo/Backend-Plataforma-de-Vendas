@@ -39,6 +39,8 @@ app.post("/checkout", async (req, res) => {
   try {
     const { nome, email } = req.body;
 
+    console.log("MP_ACCESS_TOKEN:", process.env.MP_ACCESS_TOKEN);
+
     const preference = {
       items: [
         {
