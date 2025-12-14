@@ -1,42 +1,33 @@
 const express = require('express');
-// 1. Importar o middleware CORS
-const cors = require('cors');
+const cors = require('cors'); 
 const { MercadoPagoConfig, Preference, Payment, MerchantOrder } = require("mercadopago");
 const dotenv = require('dotenv');
-const nodemailer = require('nodemailer');
+const fs = require('fs'); // Necessário para ler o PDF
+// 1. Importar o SDK do SendGrid
+const sgMail = require('@sendgrid/mail'); 
 
 // Carregar variáveis de ambiente do arquivo .env
 dotenv.config();
 
-// Configuração do CORS para permitir apenas o seu frontend
+// Configuração do CORS (mantida)
 const corsOptions = {
-    // 2. Definir a origem permitida (o seu frontend)
-    origin: 'https://caminhodigital.vercel.app',
-    optionsSuccessStatus: 200
+  origin: 'https://caminhodigital.vercel.app', 
+  optionsSuccessStatus: 200 
 }
 
-// Configuração do Nodemailer (mantida )
-// Configuração do Nodemailer
-const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    secure: process.env.EMAIL_PORT == 465, // true for 465, false for other ports
-    // Adicionar requireTLS para a porta 587
-    requireTLS: process.env.EMAIL_PORT == 587,
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-    },
-});
+// 2. Configurar a API Key do SendGrid
+sgMail.setApiKey(process.env.SENDGRID_API_KEY );
 
-
-// Função para enviar o e-mail com o PDF (mantida)
+// 3. Função para enviar o e-mail com o PDF (AGORA COM SENDGRID)
 async function sendProductEmail(recipientEmail, pdfPath) {
-    // ... (código da função sendProductEmail)
     try {
-        const info = await transporter.sendMail({
-            from: `"Sua Loja" <${process.env.EMAIL_USER}>`,
+        // Ler o arquivo PDF e converter para Base64 (necessário para a API do SendGrid)
+        const fileContent = fs.readFileSync(`./${pdfPath}`).toString('base64');
+
+        const msg = {
             to: recipientEmail,
+            // O e-mail DEVE ser o que acabou de verificar no SendGrid
+            from: 'migueloliveiraaleixosantos1@gmail.com', 
             subject: "Seu Produto Digital - O Caminho Real para a Sua Renda Online",
             html: `
                 <p>Parabéns! Seu pagamento foi aprovado.</p>
@@ -45,17 +36,22 @@ async function sendProductEmail(recipientEmail, pdfPath) {
             `,
             attachments: [
                 {
+                    content: fileContent,
                     filename: pdfPath,
-                    path: `./${pdfPath}`,
-                    contentType: 'application/pdf'
-                }
-            ]
-        });
+                    type: 'application/pdf',
+                    disposition: 'attachment',
+                },
+            ],
+        };
 
-        console.log("E-mail enviado: %s", info.messageId);
+        await sgMail.send(msg);
+        console.log("E-mail enviado com sucesso via SendGrid!");
         return true;
     } catch (error) {
-        console.error("Erro ao enviar e-mail:", error);
+        console.error("Erro ao enviar e-mail via SendGrid:", error);
+        if (error.response) {
+            console.error(error.response.body)
+        }
         return false;
     }
 }
@@ -63,19 +59,18 @@ async function sendProductEmail(recipientEmail, pdfPath) {
 const app = express();
 const port = 3000;
 
-// 3. Usar o middleware CORS ANTES de qualquer rota
-app.use(cors(corsOptions));
+// Usar o middleware CORS (mantido)
+app.use(cors(corsOptions)); 
 
-// Middleware para processar JSON no corpo das requisições
+// Middleware para processar JSON no corpo das requisições (mantido)
 app.use(express.json());
 
-// Configurar as credenciais do Mercado Pago (mantida)
-const client = new MercadoPagoConfig({
+// Configuração do Mercado Pago (mantida)
+const client = new MercadoPagoConfig({ 
     accessToken: process.env.ACCESS_TOKEN,
     options: { timeout: 5000 }
 });
 
-// Inicializar os clientes de API (mantida)
 const preferenceClient = new Preference(client);
 const paymentClient = new Payment(client);
 const merchantOrderClient = new MerchantOrder(client);
@@ -86,8 +81,9 @@ app.get('/', (req, res) => {
     res.send('Servidor de Backend do Mercado Pago rodando!');
 });
 
-// Rota para criar a preferência de pagamento (mantida e corrigida anteriormente)
+// Rota para criar a preferência de pagamento (mantida)
 app.post('/create_preference', async (req, res) => {
+    // ... (código da rota create_preference)
     const { buyer_email, external_reference } = req.body;
 
     if (!buyer_email) {
@@ -122,8 +118,8 @@ app.post('/create_preference', async (req, res) => {
     };
 
     try {
-        const response = await preferenceClient.create({ body: preference });
-
+        const response = await preferenceClient.create({ body: preference } );
+        
         console.log(`Preferência criada com sucesso. External Reference: ${external_reference}`);
         res.status(200).json({
             id: response.id,
@@ -141,7 +137,7 @@ app.get('/feedback/:status', (req, res) => {
     res.send(`Status do Pagamento: ${req.params.status}. Detalhes da transação: ${JSON.stringify(req.query)}`);
 });
 
-// Rota para receber notificações de Webhook (mantida e corrigida anteriormente)
+// Rota para receber notificações de Webhook (mantida)
 app.post('/webhook', async (req, res) => {
     const { topic, id } = req.query;
 
@@ -171,6 +167,7 @@ app.post('/webhook', async (req, res) => {
                 const externalRef = resource.external_reference;
 
                 if (recipientEmail && pdfPath) {
+                    // 4. Chamada da função de envio de e-mail atualizada
                     const emailSent = await sendProductEmail(recipientEmail, pdfPath);
                     if (emailSent) {
                         console.log(`✓ E-mail enviado com sucesso para ${recipientEmail} (Pedido: ${externalRef})`);
@@ -206,5 +203,5 @@ app.post('/webhook', async (req, res) => {
 
 // Iniciar o servidor (mantida)
 app.listen(port, () => {
-    console.log(`Servidor rodando em http://localhost:${port}`);
+    console.log(`Servidor rodando em http://localhost:${port}` );
 });
