@@ -1,13 +1,13 @@
+// server.js
 const express = require("express");
 const cors = require("cors");
-const { MercadoPago } = require("@mercadopago/sdk");
+const mercadopago = require("mercadopago");
 const dotenv = require("dotenv");
 const nodemailer = require("nodemailer");
 const path = require("path");
 
 dotenv.config();
 
-// Inicializar o app **antes de usar**
 const app = express();
 
 // Middlewares
@@ -16,10 +16,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Configurar Mercado Pago
-
-const mp = new MercadoPago({
-  accessToken: process.env.MP_ACCESS_TOKEN
-});
+mercadopago.configurations = {
+  access_token: process.env.MP_ACCESS_TOKEN
+};
 
 // Configura Nodemailer
 const transporter = nodemailer.createTransport({
@@ -62,9 +61,13 @@ app.post("/checkout", async (req, res) => {
       auto_return: "approved",
     };
 
-    const response = await mp.preferences.create(preference);
+    // Criar preferência com o SDK correto
+    const response = await mercadopago.preferences.create(preference);
 
-    res.json({ id: response.body.id, init_point: response.body.init_point });
+    res.json({
+      id: response.body.id,
+      init_point: response.body.init_point
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro ao criar preferência" });
