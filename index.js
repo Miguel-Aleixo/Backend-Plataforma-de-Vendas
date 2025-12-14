@@ -159,7 +159,7 @@ app.post('/webhook', async (req, res) => {
                 console.log("Pagamento Aprovado. Iniciando envio de e-mail...");
                 console.log(`Pedido (external_reference): ${resource.external_reference}`);
 
-                const recipientEmail = resource.payer.email;
+                const recipientEmail = 'caminhodigital00@gmail.com';
                 
                 // >>>>> LOG DE DEBBUG AQUI <<<<<
                 console.log(`[DEBUG] E-mail do Destinatário: ${recipientEmail}`);
