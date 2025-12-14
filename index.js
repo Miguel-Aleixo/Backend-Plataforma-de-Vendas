@@ -50,11 +50,18 @@ async function sendProductEmail(recipientEmail, pdfPath) {
 const app = express();
 const port = 3000;
 
+const corsOptions = {
+    origin: 'https://caminhodigital.vercel.app', // Apenas o seu domínio do frontend
+    optionsSuccessStatus: 200 // Para navegadores legados
+}
+
+app.use(cors(corsOptions));
+
 // Middleware para processar JSON no corpo das requisições
 app.use(express.json());
 
 // 2. Configurar as credenciais do Mercado Pago com a nova classe MercadoPagoConfig
-const client = new MercadoPagoConfig({ 
+const client = new MercadoPagoConfig({
     accessToken: process.env.ACCESS_TOKEN,
     options: { timeout: 5000 }
 });
@@ -112,7 +119,7 @@ app.post('/create_preference', async (req, res) => {
     try {
         // 3. Alteração: Usar preferenceClient.create e passar o objeto preference dentro de { body: ... }
         const response = await preferenceClient.create({ body: preference });
-        
+
         console.log(`Preferência criada com sucesso. External Reference: ${external_reference}`);
         res.status(200).json({
             // 4. Alteração: O novo SDK retorna o objeto diretamente, sem a propriedade .body
@@ -210,5 +217,5 @@ app.post('/webhook', async (req, res) => {
 
 // Iniciar o servidor
 app.listen(port, () => {
-    console.log(`Servidor rodando em http://localhost:${port}` );
+    console.log(`Servidor rodando em http://localhost:${port}`);
 });
