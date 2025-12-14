@@ -1,110 +1,67 @@
 // server.js
 const express = require("express");
 const cors = require("cors");
-const mercadopago = require("mercadopago");
-const dotenv = require("dotenv");
 const nodemailer = require("nodemailer");
 const path = require("path");
+const bodyParser = require("body-parser");
+const dotenv = require("dotenv");
 
 dotenv.config();
 
 const app = express();
+app.use(cors());
+app.use(bodyParser.json()); // importante para o webhook receber JSON
 
-// Middlewares
-app.use(cors({ origin: "*" }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Configurar Mercado Pago
-mercadopago.configurations = {
-  access_token: process.env.MP_ACCESS_TOKEN
-};
-
-// Configura Nodemailer
+// Configurar Nodemailer
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: process.env.EMAIL_USER, // seu email
+    pass: process.env.EMAIL_PASS, // senha ou app password
   },
 });
 
 // Rota de teste
-app.get("/", (req, res) => {
-  res.send("Servidor funcionando ✅");
-});
+app.get("/", (req, res) => res.send("Servidor rodando ✅"));
 
-// Criar preferência de pagamento
-app.post("/checkout", async (req, res) => {
-  try {
-    const { nome, email } = req.body;
-
-    console.log("MP_ACCESS_TOKEN:", process.env.MP_ACCESS_TOKEN);
-
-    const preference = {
-      items: [
-        {
-          title: "Ebook Definitivo",
-          unit_price: 0.01,
-          quantity: 1,
-        },
-      ],
-      payer: {
-        name: nome,
-        email: email,
-      },
-      back_urls: {
-        success: "https://caminhodigital.vercel.app/sucesso",
-        failure: "https://caminhodigital.vercel.app/erro",
-        pending: "https://caminhodigital.vercel.app/pendente",
-      },
-      auto_return: "approved",
-    };
-
-    // Criar preferência com o SDK correto
-    const response = await mercadopago.preferences.create(preference);
-
-    res.json({
-      id: response.body.id,
-      init_point: response.body.init_point
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erro ao criar preferência" });
-  }
-});
-
-// Webhook para pagamento aprovado
+// Webhook do Mercado Pago
 app.post("/webhook", async (req, res) => {
   try {
+    // Mercado Pago envia o payment_id no query ou body
     const paymentId = req.query.id || req.body.id;
+    const status = req.body.status || req.body.data?.status; // depende do tipo de webhook
+
     if (!paymentId) return res.status(400).send("No payment ID");
 
-    const payment = await mercadopago.payment.get(paymentId);
+    console.log(`Pagamento recebido: ${paymentId} - status: ${status}`);
 
-    if (payment.body.status === "approved") {
-      const email = payment.body.payer.email;
+    // Se aprovado, envia o ebook
+    if (status === "approved") {
+      const email = req.body.payer?.email || req.body.data?.payer?.email;
 
-      // Envia o ebook por email
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: email,
-        subject: "Seu Ebook Definitivo",
-        text: "Obrigado pela compra! Segue seu ebook em anexo.",
-        attachments: [
-          {
-            filename: "Ebook.pdf",
-            path: path.join(__dirname, "ebook.pdf"),
-          },
-        ],
-      });
+      if (!email) {
+        console.warn("Email do comprador não encontrado!");
+      } else {
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: email,
+          subject: "Seu Ebook Definitivo",
+          text: "Obrigado pela compra! Segue seu ebook em anexo.",
+          attachments: [
+            {
+              filename: "Ebook.pdf",
+              path: path.join(__dirname, "ebook.pdf"),
+            },
+          ],
+        });
 
-      console.log(`Ebook enviado para ${email}`);
+        console.log(`Ebook enviado para ${email}`);
+      }
     }
 
     res.status(200).send("Webhook recebido ✅");
   } catch (err) {
-    console.error(err);
+    console.error("Erro no webhook:", err);
     res.status(500).send("Erro no webhook");
   }
 });
