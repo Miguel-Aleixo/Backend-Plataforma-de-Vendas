@@ -1,6 +1,6 @@
 const express = require('express');
 // 1. Importar o middleware CORS
-const cors = require('cors'); 
+const cors = require('cors');
 const { MercadoPagoConfig, Preference, Payment, MerchantOrder } = require("mercadopago");
 const dotenv = require('dotenv');
 const nodemailer = require('nodemailer');
@@ -10,21 +10,25 @@ dotenv.config();
 
 // Configuração do CORS para permitir apenas o seu frontend
 const corsOptions = {
-  // 2. Definir a origem permitida (o seu frontend)
-  origin: 'https://caminhodigital.vercel.app', 
-  optionsSuccessStatus: 200 
+    // 2. Definir a origem permitida (o seu frontend)
+    origin: 'https://caminhodigital.vercel.app',
+    optionsSuccessStatus: 200
 }
 
 // Configuração do Nodemailer (mantida )
+// Configuração do Nodemailer
 const transporter = nodemailer.createTransport({
     host: process.env.EMAIL_HOST,
     port: process.env.EMAIL_PORT,
-    secure: process.env.EMAIL_PORT == 465,
+    secure: process.env.EMAIL_PORT == 465, // true for 465, false for other ports
+    // Adicionar requireTLS para a porta 587
+    requireTLS: process.env.EMAIL_PORT == 587,
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
 });
+
 
 // Função para enviar o e-mail com o PDF (mantida)
 async function sendProductEmail(recipientEmail, pdfPath) {
@@ -60,13 +64,13 @@ const app = express();
 const port = 3000;
 
 // 3. Usar o middleware CORS ANTES de qualquer rota
-app.use(cors(corsOptions)); 
+app.use(cors(corsOptions));
 
 // Middleware para processar JSON no corpo das requisições
 app.use(express.json());
 
 // Configurar as credenciais do Mercado Pago (mantida)
-const client = new MercadoPagoConfig({ 
+const client = new MercadoPagoConfig({
     accessToken: process.env.ACCESS_TOKEN,
     options: { timeout: 5000 }
 });
@@ -118,8 +122,8 @@ app.post('/create_preference', async (req, res) => {
     };
 
     try {
-        const response = await preferenceClient.create({ body: preference } );
-        
+        const response = await preferenceClient.create({ body: preference });
+
         console.log(`Preferência criada com sucesso. External Reference: ${external_reference}`);
         res.status(200).json({
             id: response.id,
@@ -202,5 +206,5 @@ app.post('/webhook', async (req, res) => {
 
 // Iniciar o servidor (mantida)
 app.listen(port, () => {
-    console.log(`Servidor rodando em http://localhost:${port}` );
+    console.log(`Servidor rodando em http://localhost:${port}`);
 });
