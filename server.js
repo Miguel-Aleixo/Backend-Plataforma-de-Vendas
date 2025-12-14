@@ -1,18 +1,21 @@
 const express = require("express");
+const cors = require("cors");
 const mercadopago = require("mercadopago");
 const dotenv = require("dotenv");
 const nodemailer = require("nodemailer");
-const cors = require("cors");
 const path = require("path");
-
-app.use(cors({ origin: "*" })); 
 
 dotenv.config();
 
+// Inicializar o app **antes de usar**
 const app = express();
+
+// Middlewares
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Configurar Mercado Pago
 mercadopago.configurations = {
   access_token: process.env.MP_ACCESS_TOKEN
 };
