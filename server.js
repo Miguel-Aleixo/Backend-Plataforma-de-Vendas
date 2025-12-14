@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const mercadopago = require("mercadopago");
+const { MercadoPago } = require("@mercadopago/sdk");
 const dotenv = require("dotenv");
 const nodemailer = require("nodemailer");
 const path = require("path");
@@ -16,9 +16,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Configurar Mercado Pago
-mercadopago.configurations = {
-  access_token: process.env.MP_ACCESS_TOKEN
-};
+
+const mp = new MercadoPago({
+  accessToken: process.env.MP_ACCESS_TOKEN
+});
 
 // Configura Nodemailer
 const transporter = nodemailer.createTransport({
@@ -61,7 +62,8 @@ app.post("/checkout", async (req, res) => {
       auto_return: "approved",
     };
 
-    const response = await mercadopago.preferences.create(preference);
+    const response = await mp.preferences.create(preference);
+
     res.json({ id: response.body.id, init_point: response.body.init_point });
   } catch (err) {
     console.error(err);
