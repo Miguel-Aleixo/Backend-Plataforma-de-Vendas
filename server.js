@@ -16,7 +16,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Configurar Mercado Pago
-mercadopago.configurations.setAccessToken(process.env.MP_ACCESS_TOKEN);
+mercadopago.configurations = {
+  access_token: process.env.MP_ACCESS_TOKEN
+};
 
 // Configura Nodemailer
 const transporter = nodemailer.createTransport({
