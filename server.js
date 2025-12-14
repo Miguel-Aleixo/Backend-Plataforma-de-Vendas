@@ -2,8 +2,8 @@ const express = require("express");
 const mercadopago = require("mercadopago");
 const dotenv = require("dotenv");
 const nodemailer = require("nodemailer");
+const cors = require("cors");
 const path = require("path");
-import cors from "cors";
 
 app.use(cors({ origin: "*" })); 
 
