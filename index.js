@@ -5,6 +5,9 @@ const dotenv = require('dotenv');
 const fs = require('fs'); 
 const sgMail = require('@sendgrid/mail'); 
 
+// 1. OBJETO PARA ARMAZENAR E-MAILS EM MEMÓRIA (Substitui o Banco de Dados)
+const orderEmails = {}; 
+
 // Carregar variáveis de ambiente do arquivo .env
 dotenv.config();
 
@@ -17,10 +20,9 @@ const corsOptions = {
 // Configurar a API Key do SendGrid
 sgMail.setApiKey(process.env.SENDGRID_API_KEY );
 
-// Função para enviar o e-mail com o PDF (AGORA COM SENDGRID)
+// Função para enviar o e-mail com o PDF (mantida)
 async function sendProductEmail(recipientEmail, pdfPath) {
     try {
-        // Ler o arquivo PDF e converter para Base64
         const fileContent = fs.readFileSync(`./${pdfPath}`).toString('base64');
 
         const msg = {
@@ -57,13 +59,9 @@ async function sendProductEmail(recipientEmail, pdfPath) {
 const app = express();
 const port = 3000;
 
-// Usar o middleware CORS (mantido)
 app.use(cors(corsOptions)); 
-
-// Middleware para processar JSON no corpo das requisições (mantido)
 app.use(express.json());
 
-// Configuração do Mercado Pago (mantida)
 const client = new MercadoPagoConfig({ 
     accessToken: process.env.ACCESS_TOKEN,
     options: { timeout: 5000 }
@@ -79,7 +77,7 @@ app.get('/', (req, res) => {
     res.send('Servidor de Backend do Mercado Pago rodando!');
 });
 
-// Rota para criar a preferência de pagamento (mantida)
+// Rota para criar a preferência de pagamento
 app.post('/create_preference', async (req, res) => {
     const { buyer_email, external_reference } = req.body;
 
@@ -90,6 +88,11 @@ app.post('/create_preference', async (req, res) => {
     if (!external_reference) {
         return res.status(400).send({ message: "O external_reference é obrigatório." });
     }
+
+    // 2. ARMAZENAR O E-MAIL DO COMPRADOR ANTES DE CRIAR A PREFERÊNCIA
+    orderEmails[external_reference] = buyer_email;
+    console.log(`[DB SIMULADO] E-mail ${buyer_email} armazenado para ${external_reference}`);
+
 
     const item = {
         title: "Produto de Teste",
@@ -134,7 +137,7 @@ app.get('/feedback/:status', (req, res) => {
     res.send(`Status do Pagamento: ${req.params.status}. Detalhes da transação: ${JSON.stringify(req.query)}`);
 });
 
-// Rota para receber notificações de Webhook (mantida)
+// Rota para receber notificações de Webhook
 app.post('/webhook', async (req, res) => {
     const { topic, id } = req.query;
 
@@ -153,19 +156,20 @@ app.post('/webhook', async (req, res) => {
 
             console.log(`--- Processando Pagamento ID: ${resource.id} ---`);
             console.log(`Status do Pagamento: ${resource.status}`);
-            console.log(`Referência Externa (Seu ID de Pedido): ${resource.external_reference}`);
+            const externalRef = resource.external_reference;
+            console.log(`Referência Externa (Seu ID de Pedido): ${externalRef}`);
 
             if (resource.status === 'approved') {
                 console.log("Pagamento Aprovado. Iniciando envio de e-mail...");
-                console.log(`Pedido (external_reference): ${resource.external_reference}`);
+                console.log(`Pedido (external_reference): ${externalRef}`);
 
-                const recipientEmail = 'caminhodigital00@gmail.com';
+                // 3. RECUPERAR O E-MAIL DO COMPRADOR USANDO O external_reference
+                const recipientEmail = orderEmails[externalRef];
                 
-                // >>>>> LOG DE DEBBUG AQUI <<<<<
-                console.log(`[DEBUG] E-mail do Destinatário: ${recipientEmail}`);
+                // Log de depuração
+                console.log(`[DEBUG] E-mail recuperado do DB Simulado: ${recipientEmail}`);
                 
                 const pdfPath = process.env.PDF_FILE_PATH;
-                const externalRef = resource.external_reference;
 
                 if (recipientEmail && pdfPath) {
                     const emailSent = await sendProductEmail(recipientEmail, pdfPath);
@@ -183,12 +187,8 @@ app.post('/webhook', async (req, res) => {
             }
 
         } else if (topic === 'merchant_order') {
-            const order = await merchantOrderClient.get({ id: id });
-            resource = order;
-
-            console.log(`--- Processando Ordem de Compra ID: ${resource.id} ---`);
-            console.log(`Status da Ordem: ${resource.status}`);
-
+            // Ignorar este tópico para evitar o erro 'Invalid Id.'
+            console.log(`--- Tópico merchant_order ignorado para evitar erro de ID ---`);
         } else {
             console.log(`Tópico de Webhook não suportado: ${topic}`);
         }
