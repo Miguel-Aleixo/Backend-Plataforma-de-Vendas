@@ -1,24 +1,37 @@
 const express = require('express');
-const cors = require('cors'); 
+const cors = require('cors');
 const { MercadoPagoConfig, Preference, Payment, MerchantOrder } = require("mercadopago");
 const dotenv = require('dotenv');
-const fs = require('fs'); 
-const sgMail = require('@sendgrid/mail'); 
+const fs = require('fs');
+const crypto = require("crypto");
+const sgMail = require('@sendgrid/mail');
 
 // 1. OBJETO PARA ARMAZENAR E-MAILS EM MEMÓRIA (Substitui o Banco de Dados)
-const orderEmails = {}; 
+const orderEmails = {};
+
+// Evita processar o mesmo pagamento mais de uma vez
+const processedPayments = new Set();
 
 // Carregar variáveis de ambiente do arquivo .env
 dotenv.config();
 
 // Configuração do CORS (mantida)
-const corsOptions = {
-  origin: 'https://caminhodigital.vercel.app', 
-  optionsSuccessStatus: 200 
-}
+const allowedOrigin = 'https://caminhodigital.vercel.app';
 
+const corsOptions = {
+    origin: function (origin, callback) {
+        // Permite frontend OU requisições sem origin (webhook, backend)
+        if (!origin || origin === allowedOrigin) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    optionsSuccessStatus: 200
+};
 // Configurar a API Key do SendGrid
-sgMail.setApiKey(process.env.SENDGRID_API_KEY );
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // Função para enviar o e-mail com o PDF (mantida)
 async function sendProductEmail(recipientEmail, pdfPath) {
@@ -27,7 +40,7 @@ async function sendProductEmail(recipientEmail, pdfPath) {
 
         const msg = {
             to: recipientEmail,
-            from: 'migueloliveiraaleixosantos1@gmail.com', 
+            from: 'migueloliveiraaleixosantos1@gmail.com',
             subject: "Seu Produto Digital - O Caminho Real para a Sua Renda Online",
             html: `
                 <p>Parabéns! Seu pagamento foi aprovado.</p>
@@ -56,13 +69,46 @@ async function sendProductEmail(recipientEmail, pdfPath) {
     }
 }
 
+function validateMercadoPagoSignature(req) {
+    const signature = req.headers["x-signature"];
+    const requestId = req.headers["x-request-id"];
+
+    if (!signature || !requestId) return false;
+
+    const parts = signature.split(",");
+    const ts = parts.find(p => p.startsWith("ts="))?.split("=")[1];
+    const v1 = parts.find(p => p.startsWith("v1="))?.split("=")[1];
+
+    if (!ts || !v1) return false;
+
+    const secret = process.env.MP_WEBHOOK_SECRET;
+    if (!secret) return false;
+
+    const manifest = `id:${requestId};ts:${ts};body:${req.rawBody}`;
+
+    const expectedHash = crypto
+        .createHmac("sha256", secret)
+        .update(manifest)
+        .digest("hex");
+
+    return expectedHash === v1;
+}
+
+
 const app = express();
 const port = 3000;
 
-app.use(cors(corsOptions)); 
-app.use(express.json());
+app.use(
+    express.json({
+        verify: (req, res, buf) => {
+            req.rawBody = buf.toString("utf8");
+        }
+    })
+);
+app.use(cors(corsOptions));
 
-const client = new MercadoPagoConfig({ 
+
+const client = new MercadoPagoConfig({
     accessToken: process.env.ACCESS_TOKEN,
     options: { timeout: 5000 }
 });
@@ -70,7 +116,6 @@ const client = new MercadoPagoConfig({
 const preferenceClient = new Preference(client);
 const paymentClient = new Payment(client);
 const merchantOrderClient = new MerchantOrder(client);
-
 
 // Rota de teste (mantida)
 app.get('/', (req, res) => {
@@ -118,8 +163,8 @@ app.post('/create_preference', async (req, res) => {
     };
 
     try {
-        const response = await preferenceClient.create({ body: preference } );
-        
+        const response = await preferenceClient.create({ body: preference });
+
         console.log(`Preferência criada com sucesso. External Reference: ${external_reference}`);
         res.status(200).json({
             id: response.id,
@@ -139,6 +184,16 @@ app.get('/feedback/:status', (req, res) => {
 
 // Rota para receber notificações de Webhook
 app.post('/webhook', async (req, res) => {
+
+    const isValid = validateMercadoPagoSignature(req);
+
+    if (!isValid) {
+        console.error("❌ Assinatura do webhook inválida");
+        return res.status(401).send("Invalid signature");
+    }
+
+    console.log("✅ Webhook autenticado com sucesso");
+
     const { topic, id } = req.query;
 
     if (!topic || !id) {
@@ -154,27 +209,34 @@ app.post('/webhook', async (req, res) => {
             const payment = await paymentClient.get({ id: id });
             resource = payment;
 
+            if (processedPayments.has(resource.id)) {
+                console.log(`⚠️ Webhook duplicado ignorado | Payment ID: ${resource.id}`);
+                return res.status(200).send("Already processed");
+            }
+
             console.log(`--- Processando Pagamento ID: ${resource.id} ---`);
             console.log(`Status do Pagamento: ${resource.status}`);
             const externalRef = resource.external_reference;
             console.log(`Referência Externa (Seu ID de Pedido): ${externalRef}`);
 
-            if (resource.status === 'approved') {
+            if (resource.status === 'approved' &&
+                resource.status_detail === 'accredited') {
                 console.log("Pagamento Aprovado. Iniciando envio de e-mail...");
                 console.log(`Pedido (external_reference): ${externalRef}`);
 
                 // 3. RECUPERAR O E-MAIL DO COMPRADOR USANDO O external_reference
                 const recipientEmail = orderEmails[externalRef];
-                
+
                 // Log de depuração
                 console.log(`[DEBUG] E-mail recuperado do DB Simulado: ${recipientEmail}`);
-                
+
                 const pdfPath = process.env.PDF_FILE_PATH;
 
                 if (recipientEmail && pdfPath) {
                     const emailSent = await sendProductEmail(recipientEmail, pdfPath);
                     if (emailSent) {
-                        console.log(`✓ E-mail enviado com sucesso para ${recipientEmail} (Pedido: ${externalRef})`);
+                        processedPayments.add(resource.id);
+                        console.log(`✓ Produto enviado e pagamento ${resource.id} marcado como processado`);
                     }
                 } else {
                     console.error("Não foi possível enviar o e-mail: E-mail do comprador ou caminho do PDF ausente.");
@@ -203,5 +265,5 @@ app.post('/webhook', async (req, res) => {
 
 // Iniciar o servidor (mantida)
 app.listen(port, () => {
-    console.log(`Servidor rodando em http://localhost:${port}` );
+    console.log(`Servidor rodando em http://localhost:${port}`);
 });
