@@ -125,6 +125,9 @@ function validateMercadoPagoSignature(req) {
     if (!ts || !v1) return false;
 
     const secret = process.env.MP_WEBHOOK_SECRET;
+
+    console.log(secret);
+    
     if (!secret) return false;
 
     const manifest = `id:${requestId};ts:${ts};body:${req.rawBody}`;
