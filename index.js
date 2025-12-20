@@ -43,10 +43,52 @@ async function sendProductEmail(recipientEmail, pdfPath) {
             from: 'migueloliveiraaleixosantos1@gmail.com',
             subject: "Seu Produto Digital - O Caminho Real para a Sua Renda Online",
             html: `
-                <p>Parabéns! Seu pagamento foi aprovado.</p>
-                <p>Segue em anexo o seu produto digital.</p>
-                <p>Obrigado por sua compra!</p>
-            `,
+        <div style="font-family: Arial, Helvetica, sans-serif; background-color: #f4f6f8; padding: 30px;">
+            <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden;">
+                
+                <div style="background: #0f172a; color: #ffffff; padding: 20px; text-align: center;">
+                    <h1 style="margin: 0; font-size: 22px;">
+                        Compra Confirmada 🎉
+                    </h1>
+                </div>
+
+                <div style="padding: 25px; color: #333333;">
+                    <p style="font-size: 16px;">
+                        Olá!
+                    </p>
+
+                    <p style="font-size: 16px; line-height: 1.6;">
+                        Seu pagamento foi <strong>aprovado com sucesso</strong> e estamos muito felizes em ter você aqui.
+                    </p>
+
+                    <p style="font-size: 16px; line-height: 1.6;">
+                        O seu produto digital <strong>“O Caminho Real para a Sua Renda Online”</strong> está anexado neste e-mail.
+                    </p>
+
+                    <div style="margin: 25px 0; padding: 15px; background: #f1f5f9; border-left: 4px solid #0f172a;">
+                        <p style="margin: 0; font-size: 15px;">
+                            📎 <strong>Dica:</strong> Salve o arquivo em um local seguro para acessar sempre que precisar.
+                        </p>
+                    </div>
+
+                    <p style="font-size: 16px; line-height: 1.6;">
+                        Qualquer dúvida, é só responder este e-mail.  
+                        Desejamos muito sucesso na sua jornada!
+                    </p>
+
+                    <p style="margin-top: 30px; font-size: 15px;">
+                        Atenciosamente,<br>
+                        <strong>Caminho Digital</strong>
+                    </p>
+                </div>
+
+                <div style="background: #f8fafc; text-align: center; padding: 15px; font-size: 13px; color: #64748b;">
+                    © ${new Date().getFullYear()} Caminho Digital — Todos os direitos reservados
+                </div>
+
+            </div>
+        </div>
+    `,
             attachments: [
                 {
                     content: fileContent,
@@ -56,6 +98,7 @@ async function sendProductEmail(recipientEmail, pdfPath) {
                 },
             ],
         };
+
 
         await sgMail.send(msg);
         console.log("E-mail enviado com sucesso via SendGrid!");
@@ -140,7 +183,7 @@ app.post('/create_preference', async (req, res) => {
 
 
     const item = {
-        title: "Produto de Teste",
+        title: "O Caminho Real para a Sua Renda Online",
         unit_price: 0.01,
         quantity: 1,
     };
