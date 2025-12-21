@@ -158,7 +158,7 @@ app.post('/create_preference', async (req, res) => {
 
     const item = {
         title: "O Caminho Real para a Sua Renda Online",
-        unit_price: 0.01,
+        unit_price: 9.90,
         quantity: 1,
     };
 
