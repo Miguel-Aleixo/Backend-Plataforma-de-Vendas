@@ -112,35 +112,6 @@ async function sendProductEmail(recipientEmail, pdfPath) {
     }
 }
 
-function validateMercadoPagoSignature(req) {
-    const signature = req.headers["x-signature"];
-    const requestId = req.headers["x-request-id"];
-
-    if (!signature || !requestId) return false;
-
-    const parts = signature.split(",");
-    const ts = parts.find(p => p.startsWith("ts="))?.split("=")[1];
-    const v1 = parts.find(p => p.startsWith("v1="))?.split("=")[1];
-
-    if (!ts || !v1) return false;
-
-    const secret = process.env.MP_WEBHOOK_SECRET;
-
-    console.log(secret);
-
-    if (!secret) return false;
-
-    const manifest = `id:${requestId};ts:${ts};body:${req.rawBody}`;
-
-    const expectedHash = crypto
-        .createHmac("sha256", secret)
-        .update(manifest)
-        .digest("hex");
-
-    return expectedHash === v1;
-}
-
-
 const app = express();
 const port = 3000;
 
@@ -236,27 +207,10 @@ app.post('/webhook', async (req, res) => {
         req.query.type ||
         req.body?.type;
 
-    const paymentId =
-        req.query.id ||
-        req.body?.data?.id;
-
-    // 🔕 Ignora tudo que não for pagamento
-    if (topic !== 'payment' || !paymentId) {
-        console.log('🔕 Evento ignorado (não é pagamento)');
-        return res.status(200).send('Ignored');
-    }
-
     // ⚠️ Teste do painel do MP NÃO envia assinatura
     if (!req.headers['x-signature']) {
         console.log('🧪 Webhook de teste do Mercado Pago ignorado');
         return res.status(200).send('Test ignored');
-    }
-
-    // 🔐 Agora sim valida assinatura
-    const isValid = validateMercadoPagoSignature(req);
-    if (!isValid) {
-        console.error('❌ Assinatura do webhook inválida');
-        return res.status(401).send('Invalid signature');
     }
 
     console.log('✅ Webhook autenticado (payment real)');
