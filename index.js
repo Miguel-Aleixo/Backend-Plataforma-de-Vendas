@@ -231,24 +231,35 @@ app.get('/feedback/:status', (req, res) => {
 // Rota para receber notificações de Webhook
 app.post('/webhook', async (req, res) => {
 
-    const { topic, type, data } = req.query;
+    const topic =
+        req.query.topic ||
+        req.query.type ||
+        req.body?.type;
 
-    // 🔕 Ignora eventos que NÃO são pagamento
-    if (topic !== 'payment' && type !== 'payment') {
+    const paymentId =
+        req.query.id ||
+        req.body?.data?.id;
+
+    // 🔕 Ignora tudo que não for pagamento
+    if (topic !== 'payment' || !paymentId) {
         console.log('🔕 Evento ignorado (não é pagamento)');
         return res.status(200).send('Ignored');
     }
 
-    // 🔐 Agora SIM valida a assinatura
-    const isValid = validateMercadoPagoSignature(req);
-    if (!isValid) {
-        console.error("❌ Assinatura do webhook inválida");
-        return res.status(401).send("Invalid signature");
+    // ⚠️ Teste do painel do MP NÃO envia assinatura
+    if (!req.headers['x-signature']) {
+        console.log('🧪 Webhook de teste do Mercado Pago ignorado');
+        return res.status(200).send('Test ignored');
     }
 
-    console.log("✅ Webhook autenticado (payment)");
+    // 🔐 Agora sim valida assinatura
+    const isValid = validateMercadoPagoSignature(req);
+    if (!isValid) {
+        console.error('❌ Assinatura do webhook inválida');
+        return res.status(401).send('Invalid signature');
+    }
 
-    console.log(`Webhook Recebido - Tópico: ${topic}, ID: ${id}`);
+    console.log('✅ Webhook autenticado (payment real)');
 
     try {
         let resource;
