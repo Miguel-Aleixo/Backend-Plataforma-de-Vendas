@@ -212,63 +212,65 @@ app.post('/webhook', async (req, res) => {
         req.body?.id ||
         req.query?.id;
 
+    // 🔴 Webhook sem ID
     if (!paymentId) {
         console.log("❌ Webhook sem payment ID, ignorado");
         return res.status(200).send("No payment ID");
     }
 
-    // ⚠️ Teste do painel do MP NÃO envia assinatura
+    // 🧪 Testes do painel do MP não possuem assinatura
     if (!req.headers['x-signature']) {
-        console.log('🧪 Webhook de teste do Mercado Pago ignorado');
+        console.log('🧪 Webhook de teste ignorado');
         return res.status(200).send('Test ignored');
     }
 
-    console.log('✅ Webhook autenticado (payment real)');
+    console.log('✅ Webhook autenticado');
+
+    // 🔕 Ignora tudo que não for pagamento
+    if (topic !== 'payment') {
+        console.log(`🔕 Evento ignorado (${topic})`);
+        return res.status(200).send('Ignored');
+    }
 
     try {
+        // 🔍 Busca pagamento REAL no Mercado Pago
+        const payment = await paymentClient.get({ id: paymentId });
 
-        if (topic !== 'payment') {
-            console.log(`🔕 Evento ignorado (${topic})`);
-            return res.status(200).send('Ignored');
+        console.log(`--- Pagamento ID: ${payment.id} ---`);
+        console.log(`Status: ${payment.status}`);
+        console.log(`Detalhe: ${payment.status_detail}`);
+
+        // ⏳ AINDA NÃO CONFIRMADO
+        if (
+            payment.status !== 'approved' ||
+            payment.status_detail !== 'accredited'
+        ) {
+            console.log("⏳ Pagamento ainda não aprovado");
+            return res.status(200).send("Waiting approval");
         }
 
-        // 🔍 Busca o pagamento REAL
-        const resource = await paymentClient.get({ id: paymentId });
-
-        // 🔒 BLOQUEIO IMEDIATO (anti-duplicação)
-        if (processedPayments.has(resource.id)) {
-            console.log(`⚠️ Webhook duplicado ignorado | Payment ID: ${resource.id}`);
+        // 🔁 PROTEÇÃO CONTRA DUPLICAÇÃO
+        if (processedPayments.has(payment.id)) {
+            console.log(`⚠️ Webhook duplicado ignorado | Payment ID: ${payment.id}`);
             return res.status(200).send("Already processed");
         }
 
-        processedPayments.add(resource.id);
-
-        console.log(`--- Processando Pagamento ID: ${resource.id} ---`);
-        console.log(`Status do Pagamento: ${resource.status}`);
-
-        if (
-            resource.status !== 'approved' ||
-            resource.status_detail !== 'accredited'
-        ) {
-            console.log("Pagamento ainda não confirmado");
-            return res.status(200).send("Not approved");
-        }
-
-        const externalRef = resource.external_reference;
+        // 📦 Referência do pedido
+        const externalRef = payment.external_reference;
         console.log(`Referência Externa: ${externalRef}`);
 
         // 📧 Recupera e-mail
         const emailFromMemory = orderEmails[externalRef];
         const emailFromPayment =
-            resource.payer?.email ||
-            resource.additional_info?.payer?.email;
+            payment.payer?.email ||
+            payment.additional_info?.payer?.email;
 
         const finalEmail = emailFromMemory || emailFromPayment;
 
         console.log(`[DEBUG] Email final usado: ${finalEmail}`);
 
         if (!finalEmail) {
-            console.error("❌ Nenhum e-mail encontrado para este pagamento");
+            console.error("❌ Nenhum e-mail encontrado");
             return res.status(200).send("No email");
         }
 
@@ -279,9 +281,13 @@ app.post('/webhook', async (req, res) => {
             return res.status(500).send("PDF missing");
         }
 
+        // ✉️ ENVIO DO PRODUTO
         await sendProductEmail(finalEmail, pdfPath);
 
-        console.log(`✅ Produto enviado com sucesso | Payment ID: ${resource.id}`);
+        // ✅ MARCA COMO PROCESSADO (SÓ DEPOIS DE TUDO OK)
+        processedPayments.add(payment.id);
+
+        console.log(`✅ Produto enviado com sucesso | Payment ID: ${payment.id}`);
 
         return res.status(200).send('OK');
 
