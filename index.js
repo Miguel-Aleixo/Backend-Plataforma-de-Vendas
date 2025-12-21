@@ -207,6 +207,16 @@ app.post('/webhook', async (req, res) => {
         req.query.type ||
         req.body?.type;
 
+    const paymentId =
+        req.body?.data?.id ||
+        req.body?.id ||
+        req.query?.id;
+
+    if (!paymentId) {
+        console.log("❌ Webhook sem payment ID, ignorado");
+        return res.status(200).send("No payment ID");
+    }
+    
     // ⚠️ Teste do painel do MP NÃO envia assinatura
     if (!req.headers['x-signature']) {
         console.log('🧪 Webhook de teste do Mercado Pago ignorado');
@@ -219,7 +229,7 @@ app.post('/webhook', async (req, res) => {
         let resource;
 
         if (topic === 'payment') {
-            const payment = await paymentClient.get({ id: id });
+            const payment = await paymentClient.get({ id: paymentId });
             resource = payment;
 
             if (processedPayments.has(resource.id)) {
