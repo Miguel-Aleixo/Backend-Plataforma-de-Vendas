@@ -216,7 +216,7 @@ app.post('/webhook', async (req, res) => {
         console.log("❌ Webhook sem payment ID, ignorado");
         return res.status(200).send("No payment ID");
     }
-    
+
     // ⚠️ Teste do painel do MP NÃO envia assinatura
     if (!req.headers['x-signature']) {
         console.log('🧪 Webhook de teste do Mercado Pago ignorado');
@@ -226,63 +226,68 @@ app.post('/webhook', async (req, res) => {
     console.log('✅ Webhook autenticado (payment real)');
 
     try {
-        let resource;
 
-        if (topic === 'payment') {
-            const payment = await paymentClient.get({ id: paymentId });
-            resource = payment;
-
-            if (processedPayments.has(resource.id)) {
-                console.log(`⚠️ Webhook duplicado ignorado | Payment ID: ${resource.id}`);
-                return res.status(200).send("Already processed");
-            }
-
-            console.log(`--- Processando Pagamento ID: ${resource.id} ---`);
-            console.log(`Status do Pagamento: ${resource.status}`);
-            const externalRef = resource.external_reference;
-            console.log(`Referência Externa (Seu ID de Pedido): ${externalRef}`);
-
-            if (resource.status === 'approved' &&
-                resource.status_detail === 'accredited') {
-                console.log("Pagamento Aprovado. Iniciando envio de e-mail...");
-                console.log(`Pedido (external_reference): ${externalRef}`);
-
-                // 3. RECUPERAR O E-MAIL DO COMPRADOR USANDO O external_reference
-                const recipientEmail = orderEmails[externalRef];
-
-                // Log de depuração
-                console.log(`[DEBUG] E-mail recuperado do DB Simulado: ${recipientEmail}`);
-
-                const pdfPath = process.env.PDF_FILE_PATH;
-
-                if (recipientEmail && pdfPath) {
-                    const emailSent = await sendProductEmail(recipientEmail, pdfPath);
-                    if (emailSent) {
-                        processedPayments.add(resource.id);
-                        console.log(`✓ Produto enviado e pagamento ${resource.id} marcado como processado`);
-                    }
-                } else {
-                    console.error("Não foi possível enviar o e-mail: E-mail do comprador ou caminho do PDF ausente.");
-                }
-
-            } else if (resource.status === 'pending') {
-                console.log("Pagamento Pendente. Aguardando confirmação.");
-            } else if (resource.status === 'rejected') {
-                console.log("Pagamento Rejeitado.");
-            }
-
-        } else if (topic === 'merchant_order') {
-            // Ignorar este tópico para evitar o erro 'Invalid Id.'
-            console.log(`--- Tópico merchant_order ignorado para evitar erro de ID ---`);
-        } else {
-            console.log(`Tópico de Webhook não suportado: ${topic}`);
+        if (topic !== 'payment') {
+            console.log(`🔕 Evento ignorado (${topic})`);
+            return res.status(200).send('Ignored');
         }
 
-        res.status(200).send('OK');
+        // 🔍 Busca o pagamento REAL
+        const resource = await paymentClient.get({ id: paymentId });
+
+        // 🔒 BLOQUEIO IMEDIATO (anti-duplicação)
+        if (processedPayments.has(resource.id)) {
+            console.log(`⚠️ Webhook duplicado ignorado | Payment ID: ${resource.id}`);
+            return res.status(200).send("Already processed");
+        }
+
+        processedPayments.add(resource.id);
+
+        console.log(`--- Processando Pagamento ID: ${resource.id} ---`);
+        console.log(`Status do Pagamento: ${resource.status}`);
+
+        if (
+            resource.status !== 'approved' ||
+            resource.status_detail !== 'accredited'
+        ) {
+            console.log("Pagamento ainda não confirmado");
+            return res.status(200).send("Not approved");
+        }
+
+        const externalRef = resource.external_reference;
+        console.log(`Referência Externa: ${externalRef}`);
+
+        // 📧 Recupera e-mail
+        const emailFromMemory = orderEmails[externalRef];
+        const emailFromPayment =
+            resource.payer?.email ||
+            resource.additional_info?.payer?.email;
+
+        const finalEmail = emailFromMemory || emailFromPayment;
+
+        console.log(`[DEBUG] Email final usado: ${finalEmail}`);
+
+        if (!finalEmail) {
+            console.error("❌ Nenhum e-mail encontrado para este pagamento");
+            return res.status(200).send("No email");
+        }
+
+        const pdfPath = process.env.PDF_FILE_PATH;
+
+        if (!pdfPath) {
+            console.error("❌ Caminho do PDF não configurado");
+            return res.status(500).send("PDF missing");
+        }
+
+        await sendProductEmail(finalEmail, pdfPath);
+
+        console.log(`✅ Produto enviado com sucesso | Payment ID: ${resource.id}`);
+
+        return res.status(200).send('OK');
 
     } catch (error) {
-        console.error(`Erro ao processar webhook para Tópico: ${topic}, ID: ${id}`, error);
-        res.status(500).send('Erro interno ao processar o webhook.');
+        console.error("❌ Erro ao processar webhook:", error);
+        return res.status(500).send('Internal error');
     }
 });
 
