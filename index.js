@@ -170,9 +170,9 @@ app.post('/create_preference', async (req, res) => {
             email: buyer_email,
         },
         back_urls: {
-            success: "https://caminhodigital/feedback/success",
-            failure: "https://caminhodigital/feedback/failure",
-            pending: "https://caminhodigital/feedback/pending",
+            success: "https://caminhodigital.vercel.app/feedback/success",
+            failure: "https://caminhodigital.vercel.app/feedback/failure",
+            pending: "https://caminhodigital.vercel.app/feedback/pending",
         },
         auto_return: "approved",
         notification_url: notificationUrl,
