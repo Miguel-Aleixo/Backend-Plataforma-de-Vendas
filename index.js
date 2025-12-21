@@ -127,7 +127,7 @@ function validateMercadoPagoSignature(req) {
     const secret = process.env.MP_WEBHOOK_SECRET;
 
     console.log(secret);
-    
+
     if (!secret) return false;
 
     const manifest = `id:${requestId};ts:${ts};body:${req.rawBody}`;
@@ -231,20 +231,22 @@ app.get('/feedback/:status', (req, res) => {
 // Rota para receber notificações de Webhook
 app.post('/webhook', async (req, res) => {
 
-    const isValid = validateMercadoPagoSignature(req);
+    const { topic, type, data } = req.query;
 
+    // 🔕 Ignora eventos que NÃO são pagamento
+    if (topic !== 'payment' && type !== 'payment') {
+        console.log('🔕 Evento ignorado (não é pagamento)');
+        return res.status(200).send('Ignored');
+    }
+
+    // 🔐 Agora SIM valida a assinatura
+    const isValid = validateMercadoPagoSignature(req);
     if (!isValid) {
         console.error("❌ Assinatura do webhook inválida");
         return res.status(401).send("Invalid signature");
     }
 
-    console.log("✅ Webhook autenticado com sucesso");
-
-    const { topic, id } = req.query;
-
-    if (!topic || !id) {
-        return res.status(400).send('Requisição de Webhook inválida: topic ou id ausentes.');
-    }
+    console.log("✅ Webhook autenticado (payment)");
 
     console.log(`Webhook Recebido - Tópico: ${topic}, ID: ${id}`);
 
