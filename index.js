@@ -40,7 +40,7 @@ async function sendProductEmail(recipientEmail, pdfPath) {
 
         const msg = {
             to: recipientEmail,
-            from: 'migueloliveiraaleixosantos1@gmail.com',
+            from: 'caminhodigital00@gmail.com',
             subject: "Seu Produto Digital - O Caminho Real para a Sua Renda Online",
             html: `
         <div style="font-family: Arial, Helvetica, sans-serif; background-color: #f4f6f8; padding: 30px;">
