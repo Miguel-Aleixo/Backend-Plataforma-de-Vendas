@@ -139,6 +139,14 @@ app.get('/', (req, res) => {
     res.send('Servidor de Backend do Mercado Pago rodando!');
 });
 
+// 🔔 Endpoint para acordar o servidor (warm-up)
+app.get('/ping', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        message: 'Servidor ativo'
+    });
+});
+
 // Rota para criar a preferência de pagamento
 app.post('/create_preference', async (req, res) => {
     const { buyer_email, external_reference } = req.body;
